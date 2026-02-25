@@ -195,6 +195,7 @@ fun DashboardScreen(
     modifier: Modifier = Modifier
 ) {
     val sample = uiState.latestSample
+    val sampleRateHzSafe = uiState.sampleRateHz.takeIf { it.isFinite() && it >= 0f } ?: 0f
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -213,7 +214,7 @@ fun DashboardScreen(
                 Text(text = "Status: ${uiState.statusText}")
                 Text(text = "Sensors: ${if (hasAllSensors) "Ready" else "Unavailable"}")
                 Text(text = "Target Rate: ${uiState.selectedSampleRate.hz} Hz")
-                Text(text = "Sample Rate: ${uiState.sampleRateHz.roundToInt()} Hz")
+                Text(text = "Sample Rate: ${sampleRateHzSafe.roundToInt()} Hz")
                 Text(text = "File: ${uiState.currentFileName}")
             }
         }
