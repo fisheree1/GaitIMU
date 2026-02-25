@@ -34,10 +34,19 @@ import com.example.gaitimu.sensor.SampleRateEstimator
 import com.example.gaitimu.ui.theme.GaitIMUTheme
 import kotlin.math.roundToInt
 
+enum class SampleRatePreset(val hz: Int) {
+    HZ_50(50),
+    HZ_100(100);
+
+    val samplePeriodUs: Int
+        get() = 1_000_000 / hz
+}
+
 data class DashboardUiState(
     val isRecording: Boolean = false,
     val statusText: String = "Idle",
     val sampleRateHz: Float = 0f,
+    val selectedSampleRate: SampleRatePreset = SampleRatePreset.HZ_50,
     val currentFileName: String = "-",
     val latestSample: ImuSample = ImuSample(0L, 0f, 0f, 0f, 0f, 0f, 0f)
 )
@@ -66,6 +75,7 @@ class MainActivity : ComponentActivity() {
                         hasAllSensors = imuRecorder.isAvailable,
                         onStart = { startRecording() },
                         onStop = { stopRecording() },
+                        onRateSelected = { rate -> selectSampleRate(rate) },
                         onExport = { exportCsv() },
                         onClear = { clearUi() },
                         modifier = Modifier.padding(innerPadding)
@@ -106,7 +116,7 @@ class MainActivity : ComponentActivity() {
 
         sampleRateEstimator.reset()
 
-        val started = imuRecorder.start { sample ->
+        val started = imuRecorder.start(samplePeriodUs = uiState.selectedSampleRate.samplePeriodUs) { sample ->
             csvLogger.append(sample)
             val hz = sampleRateEstimator.onSample(sample.timestampNs)
             uiState = uiState.copy(
@@ -123,7 +133,7 @@ class MainActivity : ComponentActivity() {
 
         uiState = uiState.copy(
             isRecording = true,
-            statusText = "Recording",
+            statusText = "Recording (${uiState.selectedSampleRate.hz}Hz)",
             currentFileName = file.name,
             sampleRateHz = 0f
         )
@@ -160,6 +170,14 @@ class MainActivity : ComponentActivity() {
         )
     }
 
+    private fun selectSampleRate(rate: SampleRatePreset) {
+        if (uiState.isRecording) {
+            toast("请先停止采集再切换采样率")
+            return
+        }
+        uiState = uiState.copy(selectedSampleRate = rate)
+    }
+
     private fun toast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
     }
@@ -171,6 +189,7 @@ fun DashboardScreen(
     hasAllSensors: Boolean,
     onStart: () -> Unit,
     onStop: () -> Unit,
+    onRateSelected: (SampleRatePreset) -> Unit,
     onExport: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier
@@ -193,8 +212,31 @@ fun DashboardScreen(
             Column(modifier = Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(text = "Status: ${uiState.statusText}")
                 Text(text = "Sensors: ${if (hasAllSensors) "Ready" else "Unavailable"}")
+                Text(text = "Target Rate: ${uiState.selectedSampleRate.hz} Hz")
                 Text(text = "Sample Rate: ${uiState.sampleRateHz.roundToInt()} Hz")
                 Text(text = "File: ${uiState.currentFileName}")
+            }
+        }
+
+        Card(modifier = Modifier.fillMaxWidth()) {
+            Row(
+                modifier = Modifier.padding(12.dp).fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                Button(
+                    onClick = { onRateSelected(SampleRatePreset.HZ_50) },
+                    enabled = !uiState.isRecording,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(if (uiState.selectedSampleRate == SampleRatePreset.HZ_50) "50Hz ✓" else "50Hz")
+                }
+                Button(
+                    onClick = { onRateSelected(SampleRatePreset.HZ_100) },
+                    enabled = !uiState.isRecording,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    Text(if (uiState.selectedSampleRate == SampleRatePreset.HZ_100) "100Hz ✓" else "100Hz")
+                }
             }
         }
 
@@ -236,6 +278,7 @@ fun DashboardPreview() {
             hasAllSensors = true,
             onStart = {},
             onStop = {},
+            onRateSelected = {},
             onExport = {},
             onClear = {}
         )
